@@ -41,12 +41,22 @@ let eventIndex: SeshatType | null = null;
 
 const seshatDefaultPassphrase = "DEFAULT_PASSPHRASE";
 
-// Default Seshat configuration using ngram tokenizer for better multi-language support
-const seshatConfig = {
-    tokenizerMode: "ngram" as const,
-    ngramMinSize: 2,
-    ngramMaxSize: 4,
-};
+// Create Seshat configuration based on tokenizer mode
+function createSeshatConfig(tokenizerMode?: string): {
+    tokenizerMode: "ngram" | "language";
+    ngramMinSize?: number;
+    ngramMaxSize?: number;
+} {
+    if (tokenizerMode === "language") {
+        return { tokenizerMode: "language" };
+    }
+    // Default to ngram for better multi-language support
+    return {
+        tokenizerMode: "ngram",
+        ngramMinSize: 2,
+        ngramMaxSize: 4,
+    };
+}
 async function getOrCreatePassphrase(store: Store, key: string): Promise<string> {
     try {
         const storedPassphrase = await store.getSecret(key);
@@ -110,9 +120,11 @@ ipcMain.on("seshat", async function (_ev: IpcMainEvent, payload): Promise<void> 
             if (eventIndex === null) {
                 const userId = args[0];
                 const deviceId = args[1];
+                const tokenizerMode = args[2] as string | undefined;
                 const passphraseKey = `seshat|${userId}|${deviceId}`;
 
                 const passphrase = await getOrCreatePassphrase(store, passphraseKey);
+                const seshatConfig = createSeshatConfig(tokenizerMode);
 
                 try {
                     await afs.mkdir(eventStorePath, { recursive: true });
