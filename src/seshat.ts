@@ -40,6 +40,13 @@ try {
 let eventIndex: SeshatType | null = null;
 
 const seshatDefaultPassphrase = "DEFAULT_PASSPHRASE";
+
+// Default Seshat configuration using ngram tokenizer for better multi-language support
+const seshatConfig = {
+    tokenizerMode: "ngram" as const,
+    ngramMinSize: 2,
+    ngramMaxSize: 4,
+};
 async function getOrCreatePassphrase(store: Store, key: string): Promise<string> {
     try {
         const storedPassphrase = await store.getSecret(key);
@@ -109,7 +116,7 @@ ipcMain.on("seshat", async function (_ev: IpcMainEvent, payload): Promise<void> 
 
                 try {
                     await afs.mkdir(eventStorePath, { recursive: true });
-                    eventIndex = new Seshat(eventStorePath, { passphrase });
+                    eventIndex = new Seshat(eventStorePath, { passphrase, ...seshatConfig });
                 } catch (e) {
                     if (e instanceof ReindexError) {
                         // If this is a reindex error, the index schema
@@ -118,6 +125,7 @@ ipcMain.on("seshat", async function (_ev: IpcMainEvent, payload): Promise<void> 
                         // database again.
                         const recoveryIndex = new SeshatRecovery(eventStorePath, {
                             passphrase,
+                            ...seshatConfig,
                         });
 
                         const userVersion = await recoveryIndex.getUserVersion();
@@ -131,10 +139,17 @@ ipcMain.on("seshat", async function (_ev: IpcMainEvent, payload): Promise<void> 
                             await recoveryIndex.reindex();
                         }
 
-                        eventIndex = new Seshat(eventStorePath, { passphrase });
+                        eventIndex = new Seshat(eventStorePath, { passphrase, ...seshatConfig });
                     } else {
-                        sendError(payload.id, <Error>e);
-                        return;
+                        // Schema mismatch or other errors - delete and recreate the database
+                        console.warn("Failed to open Seshat database, deleting and recreating:", e);
+                        await deleteContents(eventStorePath);
+                        try {
+                            eventIndex = new Seshat(eventStorePath, { passphrase, ...seshatConfig });
+                        } catch (e2) {
+                            sendError(payload.id, <Error>e2);
+                            return;
+                        }
                     }
                 }
             }
