@@ -47,15 +47,15 @@ function createSeshatConfig(tokenizerMode?: string): {
     ngramMinSize?: number;
     ngramMaxSize?: number;
 } {
-    if (tokenizerMode === "language") {
-        return { tokenizerMode: "language" };
+    if (tokenizerMode === "ngram") {
+        return {
+            tokenizerMode: "ngram",
+            ngramMinSize: 2,
+            ngramMaxSize: 4,
+        };
     }
-    // Default to ngram for better multi-language support
-    return {
-        tokenizerMode: "ngram",
-        ngramMinSize: 2,
-        ngramMaxSize: 4,
-    };
+    // Default to language-based tokenizer
+    return { tokenizerMode: "language" };
 }
 async function getOrCreatePassphrase(store: Store, key: string): Promise<string> {
     try {
@@ -158,6 +158,8 @@ ipcMain.on("seshat", async function (_ev: IpcMainEvent, payload): Promise<void> 
                         await deleteContents(eventStorePath);
                         try {
                             eventIndex = new Seshat(eventStorePath, { passphrase, ...seshatConfig });
+                            // Return that the database was recreated so element-web can re-add checkpoints
+                            ret = { wasRecreated: true };
                         } catch (e2) {
                             sendError(payload.id, <Error>e2);
                             return;
